@@ -73,9 +73,8 @@ function selectLanguage(lang: string): [string, Grammar | undefined, boolean] {
   const langNormalized = lang?.toLowerCase() || '';
   const [isDiff, langAfterCheckedDiff] = checkIncludingDiff(langNormalized);
   const langAlias = fallbackLanguages[langAfterCheckedDiff];
-  const langToUse = langAlias || langNormalized;
+  const langToUse = langAlias || langAfterCheckedDiff;
   const prismLang = loadPrismLang(langToUse);
-  // console.log(`a=>${langToUse}, b=>${prismLang}`);
   return [langToUse, prismLang, isDiff];
 }
 
@@ -95,16 +94,21 @@ function highlight(markdownit: MarkdownIt, text: string, lang: string): string {
   const [langToUse, prismLang, isDiff] = selectLanguage(lang);
   // 1. Use `diff` highlight with `language` if set.
   // 2. Use `language` (or `diff`, which is included) only.
-  // 3. Use plain Markdown
+  // 3. Use plain Markdown.
   const code = prismLang
     ? isDiff
-      ? Prism.highlight(text, Prism.languages.diff, 'diff-' + langToUse)
+      ? // ? Prism.highlight(text, Prism.languages.diff, 'diff-' + langToUse)
+        Prism.highlight(text, prismLang, 'diff-' + langToUse)
       : Prism.highlight(text, prismLang, langToUse)
     : markdownit.utils.escapeHtml(text);
   const classAttribute = langToUse
-    ? ` class="${markdownit.options.langPrefix}${markdownit.utils.escapeHtml(
-        langToUse
-      )}"`
+    ? isDiff
+      ? ` class="${
+          markdownit.options.langPrefix
+        }diff-${markdownit.utils.escapeHtml(langToUse)}  diff-highlight"`
+      : ` class="${markdownit.options.langPrefix}${markdownit.utils.escapeHtml(
+          langToUse
+        )}"`
     : '';
   return `<pre${classAttribute}><code${classAttribute}>${code}</code></pre>`;
 }
