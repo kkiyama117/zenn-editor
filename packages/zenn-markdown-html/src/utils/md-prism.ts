@@ -1,4 +1,4 @@
-import Prism, { Grammar } from 'prismjs';
+import Prism, { Grammar, TokenStream } from 'prismjs';
 import loadLanguages from 'prismjs/components/';
 import MarkdownIt from 'markdown-it';
 
@@ -23,14 +23,22 @@ const DEFAULTS: Options = {
  *
  * @param lang
  *        Code of the language to load.
+ * @param isDiff
+ *        whether to use diff with language or not
  * @return The Prism language object for the provided {@code lang} code. {@code undefined} if the language is not known to Prism.
  */
-function loadPrismLang(lang: string): Grammar | undefined {
+function loadPrismLang(lang: string, isDiff: boolean): Grammar | undefined {
   if (!lang) return undefined;
   let langObject = Prism.languages[lang];
   if (langObject === undefined) {
     loadLanguages([lang]);
     langObject = Prism.languages[lang];
+  }
+  if (isDiff) {
+    if (Prism.languages['diff'] === undefined) {
+      loadLanguages(['diff']);
+    }
+    langObject = Prism.languages['diff'];
   }
   return langObject;
 }
@@ -74,7 +82,7 @@ function selectLanguage(lang: string): [string, Grammar | undefined, boolean] {
   const [isDiff, langAfterCheckedDiff] = checkIncludingDiff(langNormalized);
   const langAlias = fallbackLanguages[langAfterCheckedDiff];
   const langToUse = langAlias || langAfterCheckedDiff;
-  const prismLang = loadPrismLang(langToUse);
+  const prismLang = loadPrismLang(langToUse, isDiff);
   return [langToUse, prismLang, isDiff];
 }
 
@@ -98,19 +106,36 @@ function highlight(markdownit: MarkdownIt, text: string, lang: string): string {
   const code = prismLang
     ? isDiff
       ? // ? Prism.highlight(text, Prism.languages.diff, 'diff-' + langToUse)
-        Prism.highlight(text, prismLang, 'diff-' + langToUse)
+        tokenizeDiff(text, prismLang, langToUse)
       : Prism.highlight(text, prismLang, langToUse)
-    : markdownit.utils.escapeHtml(text);
+    : (markdownit.utils.escapeHtml(text) as string);
+  if (isDiff) {
+    console.log(code);
+  }
   const classAttribute = langToUse
     ? isDiff
-      ? ` class="${
+      ? ` class="diff-highlight ${
           markdownit.options.langPrefix
-        }diff-${markdownit.utils.escapeHtml(langToUse)}  diff-highlight"`
+        }diff-${markdownit.utils.escapeHtml(langToUse)}"`
       : ` class="${markdownit.options.langPrefix}${markdownit.utils.escapeHtml(
           langToUse
         )}"`
     : '';
   return `<pre${classAttribute}><code${classAttribute}>${code}</code></pre>`;
+}
+
+/**
+ * Parse token on the same way as prism `diff-highlight` plugin
+ *
+ * @param code
+ *        raw code
+ * @param grammar
+ *        Grammar
+ * @param lang
+ *        Code of the language to highlight the text in.
+ */
+function tokenizeDiff(code: string, grammar: Grammar, lang: string): string {
+  return Prism.highlight(code, grammar, lang);
 }
 
 /**
